@@ -97,14 +97,27 @@ def split_message(text: str, limit: int = 4096) -> list[str]:
     return parts
 
 
+SYSTEM_PROMPT = (
+    "Ты — умный и вдумчивый ассистент. "
+    "Отвечай по делу, без воды и лишних вступлений. "
+    "Если вопрос требует анализа — разбирай аргументы за и против, "
+    "сопоставляй факты и приходи к обоснованному выводу. "
+    "Не бойся занять позицию, если данные на это указывают. "
+    "Пиши живым языком, без канцелярита и шаблонных фраз. "
+    "Формат ответа подбирай под вопрос: короткий вопрос — короткий ответ, "
+    "сложный — развёрнутый с аргументацией."
+)
+
+
 async def ask_llm(
     client: "OpenAI",
     history: list[dict],
 ) -> str:
     def _call() -> str:
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}] + history
         resp = client.chat.completions.create(
             model=config.OPENROUTER_MODEL,
-            messages=history,
+            messages=messages,
         )
         return resp.choices[0].message.content.strip()
 
