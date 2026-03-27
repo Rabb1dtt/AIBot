@@ -51,15 +51,6 @@ def build_llm_client() -> Optional["OpenAI"]:
     return None
 
 
-def get_display_name(message: Message) -> str:
-    user = message.from_user
-    if not user:
-        return "Unknown"
-    if user.first_name and user.last_name:
-        return f"{user.first_name} {user.last_name}"
-    return user.first_name or user.username or "Unknown"
-
-
 def extract_query(message: Message, bot_username: str) -> Optional[str]:
     text = (message.text or "").strip()
     if not text:
@@ -167,16 +158,11 @@ async def main() -> None:
         if not query:
             return
 
-        # In groups, prefix with user name so LLM knows who's asking
-        is_group = message.chat.type in {"group", "supergroup"}
-        user_name = get_display_name(message)
-        user_content = f"[{user_name}]: {query}" if is_group else query
-
         key = str(message.chat.id)
         if key not in chat_histories:
             chat_histories[key] = deque(maxlen=MAX_HISTORY)
         history = chat_histories[key]
-        history.append({"role": "user", "content": user_content})
+        history.append({"role": "user", "content": query})
 
         # Build messages list from history
         messages = list(history)
