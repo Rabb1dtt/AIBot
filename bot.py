@@ -105,16 +105,42 @@ SYSTEM_PROMPT = (
     "Не бойся занять позицию, если данные на это указывают. "
     "Пиши живым языком, без канцелярита и шаблонных фраз. "
     "Формат ответа подбирай под вопрос: короткий вопрос — короткий ответ, "
-    "сложный — развёрнутый с аргументацией."
+    "сложный — развёрнутый с аргументацией. "
+    "Тебе доступны результаты веб-поиска по запросу пользователя — "
+    "используй их как источник актуальной информации, но формулируй ответ своими словами."
 )
+
+
+async def web_search(client: "OpenAI", query: str) -> Optional[str]:
+    """Quick web search via gpt-4o-mini-search-preview."""
+    def _call() -> str:
+        resp = client.chat.completions.create(
+            model=config.SEARCH_MODEL,
+            messages=[{"role": "user", "content": query}],
+        )
+        return resp.choices[0].message.content.strip()
+
+    try:
+        return await asyncio.to_thread(_call)
+    except Exception:
+        logger.exception("Web search failed")
+        return None
 
 
 async def ask_llm(
     client: "OpenAI",
     history: list[dict],
+    search_context: Optional[str] = None,
 ) -> str:
     def _call() -> str:
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}] + history
+        system = SYSTEM_PROMPT
+        if search_context:
+            system += (
+                "\n\n--- Результаты веб-поиска ---\n"
+                + search_context
+                + "\n--- Конец результатов ---"
+            )
+        messages = [{"role": "system", "content": system}] + history
         resp = client.chat.completions.create(
             model=config.OPENROUTER_MODEL,
             messages=messages,
@@ -181,8 +207,12 @@ async def main() -> None:
         messages = list(history)
 
         placeholder = await message.answer("Думаю...")
+
+        # Web search for fresh data, then pass to Grok
+        search_result = await web_search(llm, query)
+
         try:
-            answer = await ask_llm(llm, messages)
+            answer = await ask_llm(llm, messages, search_context=search_result)
         except Exception as e:
             logger.exception("LLM call failed")
             history.pop()  # remove failed question
